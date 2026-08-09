@@ -3,6 +3,7 @@ import { calculateAbilityModifier } from "../abilityModifier";
 import { calculateProficiencyBonus } from "../proficiencyBonus";
 import { calculateInitiative, calculateModifierWithProficiency, calculatePassiveScore } from "../skillModifier";
 import { calculateArmorClass } from "../armorClass";
+import { getAbilityScore } from "../abilityScoreLookup";
 
 describe("calculateAbilityModifier", () => {
   it("matches the standard 5e modifier table", () => {
@@ -83,5 +84,17 @@ describe("calculateArmorClass", () => {
   it("a homebrew item can skip the formula with a flat override", () => {
     const magicRobe = { baseAc: 0, dexCap: null, flatAcOverride: 22 };
     expect(calculateArmorClass(magicRobe, 10)).toBe(22);
+  });
+});
+
+describe("getAbilityScore", () => {
+  const scores = { strength: 10, dexterity: 20, constitution: 12, intelligence: 14, wisdom: 10, charisma: 16 };
+
+  it("looks up the right score by governing ability name", () => {
+    expect(getAbilityScore(scores, "dexterity")).toBe(20);
+  });
+
+  it("throws on an unrecognized ability name rather than returning undefined silently", () => {
+    expect(() => getAbilityScore(scores, "luck")).toThrow();
   });
 });

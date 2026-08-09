@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getCurrentSession, subscribeToAuthChanges } from "./lib/supabase/auth";
 import SignIn from "./components/SignIn";
-import CampaignHub from "./components/CampaignHub";
+import SignedInShell from "./components/SignedInShell";
 
 /**
  * Tip: this component's ONLY job is picking a screen based on auth
@@ -29,7 +29,7 @@ export default function App() {
     return <SignIn />;
   }
 
-  return <CampaignHub user={user} />;
+  return <SignedInShell user={user} />;
 }
 
 function CenteredMessage({ text }: { text: string }) {

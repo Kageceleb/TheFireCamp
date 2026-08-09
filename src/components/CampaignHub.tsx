@@ -9,19 +9,21 @@ import {
 import { signOut } from "../lib/supabase/auth";
 import CreateCampaignModal from "./CreateCampaignModal";
 import JoinCampaignModal from "./JoinCampaignModal";
+import type { OpenCampaign } from "./SignedInShell";
 
 interface CampaignHubProps {
   user: User;
+  onOpenCampaign: (campaign: OpenCampaign) => void;
 }
 
 type ActiveModal = "create" | "join" | null;
 
 /**
  * Tip: the post-sign-in landing screen. Its job is "show my campaigns,
- * let me create or join one" — nothing about what happens INSIDE a
- * campaign lives here, that's a future screen once a campaign is opened.
+ * let me create or join one, or open one" — what happens INSIDE a
+ * campaign is CampaignView's job, not this component's.
  */
-export default function CampaignHub({ user }: CampaignHubProps) {
+export default function CampaignHub({ user, onOpenCampaign }: CampaignHubProps) {
   const [memberships, setMemberships] = useState<CampaignMembership[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export default function CampaignHub({ user }: CampaignHubProps) {
             Loading your campaigns…
           </p>
         ) : (
-          <CampaignList memberships={memberships} />
+          <CampaignList memberships={memberships} onSelect={onOpenCampaign} />
         )}
       </div>
 
@@ -112,8 +114,14 @@ export default function CampaignHub({ user }: CampaignHubProps) {
   );
 }
 
-/** Tip: pure display of whatever campaign list it's given — doesn't fetch anything itself, so it's trivial to test or reuse. */
-function CampaignList({ memberships }: { memberships: CampaignMembership[] }) {
+/** Tip: pure display of whatever campaign list it's given — doesn't fetch anything itself, so it's trivial to test or reuse. Clicking a row opens that campaign. */
+function CampaignList({
+  memberships,
+  onSelect,
+}: {
+  memberships: CampaignMembership[];
+  onSelect: (campaign: OpenCampaign) => void;
+}) {
   if (memberships.length === 0) {
     return (
       <p className="py-8 text-center text-sm" style={{ color: "#5f5947" }}>
@@ -125,16 +133,17 @@ function CampaignList({ memberships }: { memberships: CampaignMembership[] }) {
   return (
     <div className="space-y-2">
       {memberships.map(({ campaign, role }) => (
-        <div
+        <button
           key={campaign.id}
-          className="flex items-center justify-between rounded-lg px-4 py-3"
+          onClick={() => onSelect({ id: campaign.id, name: campaign.name, role })}
+          className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left"
           style={{ background: "#1e1c19", border: "1px solid #3D2B1D" }}
         >
           <span style={{ color: "#F0C58A" }}>{campaign.name}</span>
           <span className="text-[11px] tracking-widest" style={{ color: "#5f5947" }}>
             {role}
           </span>
-        </div>
+        </button>
       ))}
     </div>
   );
