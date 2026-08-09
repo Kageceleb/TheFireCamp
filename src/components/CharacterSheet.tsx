@@ -5,14 +5,18 @@ import {
   updateCharacterVitals,
   type CharacterSheetData,
 } from "../lib/supabase/characters";
+import { listEquippedItems, type EquippedItem } from "../lib/supabase/equipment";
 import { calculateAbilityModifier } from "../lib/character/abilityModifier";
 import { calculateProficiencyBonus } from "../lib/character/proficiencyBonus";
 import { calculateInitiative, calculateModifierWithProficiency, calculatePassiveScore } from "../lib/character/skillModifier";
 import { calculateArmorClass } from "../lib/character/armorClass";
+import { calculateCarryCapacityKg } from "../lib/character/carryCapacity";
 import { getAbilityScore } from "../lib/character/abilityScoreLookup";
 import type { AbilityName } from "../lib/character/types";
 import ExhaustionIndicator from "./ExhaustionIndicator";
 import DeathSavesIndicator from "./DeathSavesIndicator";
+import CharacterEquipmentPanel from "./CharacterEquipmentPanel";
+import CharacterBagsPanel from "./bags/CharacterBagsPanel";
 
 const ABILITY_LABELS: Record<AbilityName, string> = {
   strength: "STR",
@@ -37,11 +41,21 @@ interface CharacterSheetProps {
  */
 export default function CharacterSheet({ characterId, canEdit, onBack }: CharacterSheetProps) {
   const [sheet, setSheet] = useState<CharacterSheetData | null>(null);
+  const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Bumped whenever equipment changes, from EITHER the Equipment panel
+  // (unequip) or the Bags panel (equip) — both react to it, so they can
+  // never drift out of sync with each other.
+  const [inventoryVersion, setInventoryVersion] = useState(0);
 
   useEffect(() => {
     void loadSheet();
+    void loadEquipment();
   }, [characterId]);
+
+  useEffect(() => {
+    if (inventoryVersion > 0) void loadEquipment();
+  }, [inventoryVersion]);
 
   async function loadSheet() {
     try {
@@ -49,6 +63,18 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
     } catch (error) {
       setErrorMessage((error as Error).message);
     }
+  }
+
+  async function loadEquipment() {
+    try {
+      setEquippedItems(await listEquippedItems(characterId));
+    } catch (error) {
+      setErrorMessage((error as Error).message);
+    }
+  }
+
+  function handleInventoryChanged() {
+    setInventoryVersion((version) => version + 1);
   }
 
   async function handleVitalsChange(updates: Parameters<typeof updateCharacterVitals>[1]) {
@@ -87,7 +113,25 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
   }
 
   const proficiencyBonus = calculateProficiencyBonus(sheet.classes);
-  const armorClass = calculateArmorClass(null, sheet.abilityScores.dexterity); // unarmored until the bag/item system exists
+
+  // Torso armor drives the base formula; an equipped shield (OffHand)
+  // adds a flat bonus on top — see calculateArmorClass's own comment
+  // for why those are one calculation, not two.
+  const torsoItem = equippedItems.find((item) => item.equippedSlot === "Torso");
+  const torsoAttributes = torsoItem?.typeAttributes as
+    | { baseAc?: number; dexCap?: number | null; flatAcOverride?: number }
+    | null;
+  const armorInput =
+    torsoAttributes && typeof torsoAttributes.baseAc === "number"
+      ? { baseAc: torsoAttributes.baseAc, dexCap: torsoAttributes.dexCap ?? null, flatAcOverride: torsoAttributes.flatAcOverride }
+      : null;
+
+  const offHandItem = equippedItems.find((item) => item.equippedSlot === "OffHand");
+  const offHandAttributes = offHandItem?.typeAttributes as { shieldBonus?: number } | null;
+  const shieldBonus = offHandAttributes?.shieldBonus ?? 0;
+
+  const armorClass = calculateArmorClass(armorInput, sheet.abilityScores.dexterity, shieldBonus);
+  const carryCapacityKg = calculateCarryCapacityKg(sheet.abilityScores.strength);
   const initiative = calculateInitiative(sheet.abilityScores.dexterity);
   const perceptionSkill = sheet.skills.find((skill) => skill.skillName === "Perception");
   const passivePerception = calculatePassiveScore(sheet.abilityScores.wisdom, proficiencyBonus, {
@@ -197,6 +241,31 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
             );
           })}
         </div>
+      </div>
+
+      <div className="mt-6 rounded-lg p-4" style={{ background: "#1e1c19", border: "1px solid #3D2B1D" }}>
+        <div className="mb-3 text-[11px] uppercase tracking-widest" style={{ color: "#a89a7d" }}>
+          Equipment
+        </div>
+        <CharacterEquipmentPanel
+          equippedItems={equippedItems}
+          characterId={characterId}
+          canEdit={canEdit}
+          onChanged={handleInventoryChanged}
+        />
+      </div>
+
+      <div className="mt-6 rounded-lg p-4" style={{ background: "#1e1c19", border: "1px solid #3D2B1D" }}>
+        <div className="mb-3 text-[11px] uppercase tracking-widest" style={{ color: "#a89a7d" }}>
+          Bags
+        </div>
+        <CharacterBagsPanel
+          characterId={characterId}
+          maxWeightKg={carryCapacityKg}
+          canEdit={canEdit}
+          refreshKey={inventoryVersion}
+          onInventoryChanged={handleInventoryChanged}
+        />
       </div>
     </div>
   );

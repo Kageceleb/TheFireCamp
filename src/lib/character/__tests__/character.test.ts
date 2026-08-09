@@ -3,6 +3,7 @@ import { calculateAbilityModifier } from "../abilityModifier";
 import { calculateProficiencyBonus } from "../proficiencyBonus";
 import { calculateInitiative, calculateModifierWithProficiency, calculatePassiveScore } from "../skillModifier";
 import { calculateArmorClass } from "../armorClass";
+import { calculateCarryCapacityKg } from "../carryCapacity";
 import { getAbilityScore } from "../abilityScoreLookup";
 
 describe("calculateAbilityModifier", () => {
@@ -84,6 +85,19 @@ describe("calculateArmorClass", () => {
   it("a homebrew item can skip the formula with a flat override", () => {
     const magicRobe = { baseAc: 0, dexCap: null, flatAcOverride: 22 };
     expect(calculateArmorClass(magicRobe, 10)).toBe(22);
+  });
+
+  it("a shield adds a flat bonus on top of whatever the base formula produces", () => {
+    expect(calculateArmorClass(null, 14, 2)).toBe(14); // 10 + 2 (Dex) + 2 (shield)
+    const leatherArmor = { baseAc: 11, dexCap: null };
+    expect(calculateArmorClass(leatherArmor, 14, 2)).toBe(15); // 11 + 2 (Dex) + 2 (shield)
+  });
+});
+
+describe("calculateCarryCapacityKg", () => {
+  it("scales linearly with Strength", () => {
+    expect(calculateCarryCapacityKg(10)).toBeCloseTo(68);
+    expect(calculateCarryCapacityKg(20)).toBeCloseTo(136);
   });
 });
 
