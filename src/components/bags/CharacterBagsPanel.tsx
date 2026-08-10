@@ -56,13 +56,16 @@ export default function CharacterBagsPanel({ characterId, maxWeightKg, canEdit, 
   }, [characterId, refreshKey]);
 
   async function refresh() {
-    setIsLoading(true);
     try {
       setBags(await getCharacterBags(characterId));
       setErrorMessage(null);
     } catch (error) {
       setErrorMessage((error as Error).message);
     } finally {
+      // isLoading only ever needs to gate the FIRST load — flipping it back
+      // to true on every subsequent refresh (e.g. after a drag) replaces
+      // this whole panel with a one-line placeholder and back again, which
+      // is a large enough layout shift to yank the page's scroll position.
       setIsLoading(false);
     }
   }
