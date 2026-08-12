@@ -9,6 +9,7 @@ import {
 import { signOut } from "../lib/supabase/auth";
 import CreateCampaignModal from "./CreateCampaignModal";
 import JoinCampaignModal from "./JoinCampaignModal";
+import SymbioteStatusBadge from "./SymbioteStatusBadge";
 import type { OpenCampaign } from "./SignedInShell";
 
 interface CampaignHubProps {
@@ -74,6 +75,10 @@ export default function CampaignHub({ user, onOpenCampaign }: CampaignHubProps) 
           <button onClick={() => void signOut()} className="text-sm" style={{ color: "#a89a7d" }}>
             Sign out
           </button>
+        </div>
+
+        <div className="mb-6">
+          <SymbioteStatusBadge />
         </div>
 
         <div className="mb-6 flex gap-2">

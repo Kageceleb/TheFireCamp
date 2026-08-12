@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   getCharacterSheet,
   setSkillProficiency,
@@ -17,6 +18,7 @@ import ExhaustionIndicator from "./ExhaustionIndicator";
 import DeathSavesIndicator from "./DeathSavesIndicator";
 import CharacterEquipmentPanel from "./CharacterEquipmentPanel";
 import CharacterBagsPanel from "./bags/CharacterBagsPanel";
+import RollButton from "./RollButton";
 
 const ABILITY_LABELS: Record<AbilityName, string> = {
   strength: "STR",
@@ -47,6 +49,7 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
   // (unequip) or the Bags panel (equip) — both react to it, so they can
   // never drift out of sync with each other.
   const [inventoryVersion, setInventoryVersion] = useState(0);
+  const [lastRoll, setLastRoll] = useState<string | null>(null);
 
   useEffect(() => {
     void loadSheet();
@@ -75,6 +78,15 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
 
   function handleInventoryChanged() {
     setInventoryVersion((version) => version + 1);
+  }
+
+  /** Tip: builds a "1d20+N" style formula from a modifier — every roll button in this sheet (checks, saves, skills) shares this one formatting rule. */
+  function d20Formula(modifier: number): string {
+    return `1d20${modifier >= 0 ? "+" : ""}${modifier}`;
+  }
+
+  function handleRolled(label: string, total: number) {
+    setLastRoll(Number.isNaN(total) ? `${label}: roll failed` : `${label}: ${total}`);
   }
 
   async function handleVitalsChange(updates: Parameters<typeof updateCharacterVitals>[1]) {
@@ -159,10 +171,27 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
         <div className="mb-3 flex flex-wrap items-center gap-4">
           <VitalStat label="HP" value={`${sheet.hpCurrent} / ${sheet.hpMax}`} />
           <VitalStat label="AC" value={String(armorClass)} />
-          <VitalStat label="Initiative" value={formatModifier(initiative)} />
+          <VitalStat
+            label="Initiative"
+            value={formatModifier(initiative)}
+            roll={
+              <RollButton
+                formula={d20Formula(initiative)}
+                label="Initiative"
+                characterName={sheet.name}
+                onRolled={handleRolled}
+              />
+            }
+          />
           <VitalStat label="Speed" value={`${sheet.speedMeters} m`} />
           <VitalStat label="Passive Perception" value={String(passivePerception)} />
         </div>
+
+        {lastRoll && (
+          <div className="mb-3 text-sm" style={{ color: "#E2A052" }}>
+            🎲 {lastRoll}
+          </div>
+        )}
 
         <ExhaustionIndicator
           level={sheet.exhaustion}
@@ -206,6 +235,20 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
               <div className="mt-1 text-[11px]" style={{ color: isSaveProficient ? "#E2A052" : "#5f5947" }}>
                 save {formatModifier(saveModifier)}
               </div>
+              <div className="mt-1.5 flex justify-center gap-2">
+                <RollButton
+                  formula={d20Formula(modifier)}
+                  label={`${ABILITY_LABELS[ability]} check`}
+                  characterName={sheet.name}
+                  onRolled={handleRolled}
+                />
+                <RollButton
+                  formula={d20Formula(saveModifier)}
+                  label={`${ABILITY_LABELS[ability]} save`}
+                  characterName={sheet.name}
+                  onRolled={handleRolled}
+                />
+              </div>
             </div>
           );
         })}
@@ -236,7 +279,15 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
                     ({ABILITY_LABELS[skill.governingAbility as AbilityName]})
                   </span>
                 </label>
-                <span style={{ color: "#a89a7d" }}>{formatModifier(modifier)}</span>
+                <span className="flex items-center gap-2" style={{ color: "#a89a7d" }}>
+                  {formatModifier(modifier)}
+                  <RollButton
+                    formula={d20Formula(modifier)}
+                    label={skill.skillName}
+                    characterName={sheet.name}
+                    onRolled={handleRolled}
+                  />
+                </span>
               </div>
             );
           })}
@@ -271,13 +322,16 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
   );
 }
 
-function VitalStat({ label, value }: { label: string; value: string }) {
+function VitalStat({ label, value, roll }: { label: string; value: string; roll?: ReactNode }) {
   return (
     <div>
       <div className="text-[11px] uppercase tracking-widest" style={{ color: "#a89a7d" }}>
         {label}
       </div>
-      <div style={{ color: "#F0C58A" }}>{value}</div>
+      <div className="flex items-center gap-1.5" style={{ color: "#F0C58A" }}>
+        {value}
+        {roll}
+      </div>
     </div>
   );
 }
