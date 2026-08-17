@@ -273,7 +273,7 @@ export async function moveItemInGridPocket(characterItemId: string, x: number, y
   if (error) throw error;
 }
 
-/** Tip: removes a whole stack from a pocket (the "Drop" action). Doesn't yet route to the campaign's Bag of Holding — that's a DM-tools feature for a later session. */
+/** Tip: removes a whole stack from a pocket outright — the low-level primitive; dropItemToBagOfHolding (bagOfHolding.ts) is what "Drop" in the UI actually calls, since a drop should route to the Bag of Holding per spec, never destroy the item. This stays exported for that reuse rather than being folded into a single function, since deleting and re-homing an item are genuinely two different operations. */
 export async function removeItemFromPocket(characterItemId: string): Promise<void> {
   const { error } = await supabase.from("character_items").delete().eq("id", characterItemId);
   if (error) throw error;
@@ -289,4 +289,70 @@ export function toWeighableBags(bags: CharacterBagData[]): WeighableBag[] {
       pocket.items.map((item) => ({ unitWeightKg: item.baseWeightKg, quantity: item.quantity }))
     ),
   }));
+}
+
+export interface PocketDestination {
+  characterBagId: string;
+  pocketTemplateId: string;
+  gridX: number | null;
+  gridY: number | null;
+  slotIndex: number | null;
+}
+
+/**
+ * Tip: searches every pocket in every bag a character carries for room
+ * to fit an item of the given footprint — "any available spot," not a
+ * specific chosen pocket. This is the third place that needed this
+ * exact search (unequipping an item, and claiming loot from the Bag of
+ * Holding, both land here now instead of each keeping their own copy of
+ * the loop) — past two call sites, duplicating it further stopped being
+ * reasonable.
+ */
+export function findAnyPocketWithRoom(
+  bags: CharacterBagData[],
+  itemWidth: number,
+  itemHeight: number
+): PocketDestination | null {
+  for (const bag of bags) {
+    for (const pocket of bag.pockets) {
+      if (pocket.packingType === "GRID") {
+        const grid = { width: pocket.gridWidth ?? 0, height: pocket.gridHeight ?? 0 };
+        const existingPlacements: PlacedGridItem[] = pocket.items
+          .filter((item) => item.gridX !== null && item.gridY !== null)
+          .map((item) => ({
+            characterItemId: item.characterItemId,
+            x: item.gridX as number,
+            y: item.gridY as number,
+            width: item.gridWidth,
+            height: item.gridHeight,
+          }));
+
+        const spot = findFirstFreeSpot(itemWidth, itemHeight, grid, existingPlacements);
+        if (spot) {
+          return {
+            characterBagId: bag.characterBagId,
+            pocketTemplateId: pocket.pocketTemplateId,
+            gridX: spot.x,
+            gridY: spot.y,
+            slotIndex: null,
+          };
+        }
+      } else {
+        const usedSlots = new Set(pocket.items.map((item) => item.slotIndex));
+        const maxSlots = pocket.slotCount ?? 0;
+        for (let slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
+          if (!usedSlots.has(slotIndex)) {
+            return {
+              characterBagId: bag.characterBagId,
+              pocketTemplateId: pocket.pocketTemplateId,
+              gridX: null,
+              gridY: null,
+              slotIndex,
+            };
+          }
+        }
+      }
+    }
+  }
+  return null;
 }

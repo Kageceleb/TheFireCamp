@@ -31,6 +31,7 @@ const ABILITY_LABELS: Record<AbilityName, string> = {
 
 interface CharacterSheetProps {
   characterId: string;
+  campaignId: string;
   canEdit: boolean;
   onBack: () => void;
 }
@@ -41,7 +42,7 @@ interface CharacterSheetProps {
  * contain any 5e rules itself, just wiring. If a formula is ever wrong,
  * the fix belongs in src/lib/character (and its tests), not here.
  */
-export default function CharacterSheet({ characterId, canEdit, onBack }: CharacterSheetProps) {
+export default function CharacterSheet({ characterId, campaignId, canEdit, onBack }: CharacterSheetProps) {
   const [sheet, setSheet] = useState<CharacterSheetData | null>(null);
   const [equippedItems, setEquippedItems] = useState<EquippedItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -229,26 +230,34 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
               <div className="text-lg" style={{ color: "#F0C58A" }}>
                 {score}
               </div>
-              <div className="text-sm" style={{ color: "#a89a7d" }}>
+
+              {/* The modifier IS the check-roll button — no separate 🎲 needed here. */}
+              <RollButton
+                formula={d20Formula(modifier)}
+                label={`${ABILITY_LABELS[ability]} check`}
+                characterName={sheet.name}
+                onRolled={handleRolled}
+                title={`Roll ${ABILITY_LABELS[ability]} check (${d20Formula(modifier)})`}
+                className="mt-0.5 block w-full text-sm font-semibold"
+                style={{ color: "#a89a7d" }}
+              >
                 {formatModifier(modifier)}
-              </div>
-              <div className="mt-1 text-[11px]" style={{ color: isSaveProficient ? "#E2A052" : "#5f5947" }}>
-                save {formatModifier(saveModifier)}
-              </div>
-              <div className="mt-1.5 flex justify-center gap-2">
-                <RollButton
-                  formula={d20Formula(modifier)}
-                  label={`${ABILITY_LABELS[ability]} check`}
-                  characterName={sheet.name}
-                  onRolled={handleRolled}
-                />
-                <RollButton
-                  formula={d20Formula(saveModifier)}
-                  label={`${ABILITY_LABELS[ability]} save`}
-                  characterName={sheet.name}
-                  onRolled={handleRolled}
-                />
-              </div>
+              </RollButton>
+
+              {/* The shield's fill IS the proficiency indicator — solid amber when proficient in this save, outlined and dim when not. Ability checks themselves don't carry a proficiency flag in 5e (only skills and saves do), so the check button above intentionally has no equivalent marker. */}
+              <RollButton
+                formula={d20Formula(saveModifier)}
+                label={`${ABILITY_LABELS[ability]} save`}
+                characterName={sheet.name}
+                onRolled={handleRolled}
+                title={`Roll ${ABILITY_LABELS[ability]} save (${d20Formula(saveModifier)})${isSaveProficient ? " — proficient" : ""}`}
+                className="mx-auto mt-1.5 flex items-center justify-center gap-1"
+              >
+                <ShieldIcon filled={isSaveProficient} />
+                <span className="text-[11px]" style={{ color: isSaveProficient ? "#E2A052" : "#5f5947" }}>
+                  {formatModifier(saveModifier)}
+                </span>
+              </RollButton>
             </div>
           );
         })}
@@ -312,6 +321,7 @@ export default function CharacterSheet({ characterId, canEdit, onBack }: Charact
         </div>
         <CharacterBagsPanel
           characterId={characterId}
+          campaignId={campaignId}
           maxWeightKg={carryCapacityKg}
           canEdit={canEdit}
           refreshKey={inventoryVersion}
@@ -339,6 +349,21 @@ function VitalStat({ label, value, roll }: { label: string; value: string; roll?
 /** Tip: 5e convention — modifiers always show their sign, even at zero ("+0"), so it visually matches every published character sheet. */
 function formatModifier(modifier: number): string {
   return modifier >= 0 ? `+${modifier}` : String(modifier);
+}
+
+/** Tip: solid fill = proficient, outline only = not — this single visual difference is the whole "is this character proficient" answer for a saving throw, no separate label needed. */
+function ShieldIcon({ filled }: { filled: boolean }) {
+  const color = filled ? "#E2A052" : "#5f5947";
+  return (
+    <svg width="13" height="15" viewBox="0 0 14 16" aria-hidden="true">
+      <path
+        d="M7 0 L13 2.5 V7.5 C13 11.5 10.5 14.5 7 16 C3.5 14.5 1 11.5 1 7.5 V2.5 Z"
+        fill={filled ? color : "none"}
+        stroke={color}
+        strokeWidth="1.2"
+      />
+    </svg>
+  );
 }
 
 /** Tip: translates the snake-ish partial update shape from updateCharacterVitals into the sheet's own field names, for the optimistic local update. */

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { listCharactersForCampaign, type CharacterListItem } from "../lib/supabase/characters";
 import CreateCharacterScreen from "./CreateCharacterScreen";
 import CharacterSheet from "./CharacterSheet";
+import CatalogManagerScreen from "./catalog/CatalogManagerScreen";
+import BagOfHoldingScreen from "./BagOfHoldingScreen";
 
 interface CampaignViewProps {
   campaignId: string;
@@ -11,7 +13,12 @@ interface CampaignViewProps {
   onBack: () => void;
 }
 
-type Screen = { name: "list" } | { name: "create" } | { name: "sheet"; characterId: string };
+type Screen =
+  | { name: "list" }
+  | { name: "create" }
+  | { name: "sheet"; characterId: string }
+  | { name: "catalog" }
+  | { name: "bagOfHolding" };
 
 /**
  * Tip: this is the "inside a campaign" screen — it owns navigation
@@ -46,6 +53,25 @@ export default function CampaignView({ campaignId, campaignName, role, currentUs
     await refreshCharacters();
   }
 
+  // Rendered standalone, before the shared wrapper below — the catalog's
+  // two-column forms want a wider max-w-4xl than every other screen
+  // here uses, so nesting it inside that narrower wrapper would just
+  // clamp it back down and squish the forms.
+  if (screen.name === "catalog") {
+    return <CatalogManagerScreen onBack={() => setScreen({ name: "list" })} />;
+  }
+
+  if (screen.name === "bagOfHolding") {
+    return (
+      <BagOfHoldingScreen
+        campaignId={campaignId}
+        role={role}
+        myCharacters={characters.filter((character) => character.ownerUserId === currentUserId)}
+        onBack={() => setScreen({ name: "list" })}
+      />
+    );
+  }
+
   return (
     <div
       className="min-h-screen w-full flex flex-col items-center py-10 px-4"
@@ -74,9 +100,19 @@ export default function CampaignView({ campaignId, campaignName, role, currentUs
               <span className="text-[11px] uppercase tracking-widest" style={{ color: "#a89a7d" }}>
                 Characters
               </span>
-              <button onClick={() => setScreen({ name: "create" })} className="text-sm" style={{ color: "#E2A052" }}>
-                + New Character
-              </button>
+              <div className="flex items-center gap-4">
+                {role === "DM" && (
+                  <button onClick={() => setScreen({ name: "catalog" })} className="text-sm" style={{ color: "#a89a7d" }}>
+                    Catalog
+                  </button>
+                )}
+                <button onClick={() => setScreen({ name: "bagOfHolding" })} className="text-sm" style={{ color: "#a89a7d" }}>
+                  Bag of Holding
+                </button>
+                <button onClick={() => setScreen({ name: "create" })} className="text-sm" style={{ color: "#E2A052" }}>
+                  + New Character
+                </button>
+              </div>
             </div>
 
             {errorMessage && <p className="mb-4 text-sm text-red-400">{errorMessage}</p>}
@@ -120,6 +156,7 @@ export default function CampaignView({ campaignId, campaignName, role, currentUs
         {screen.name === "sheet" && (
           <CharacterSheet
             characterId={screen.characterId}
+            campaignId={campaignId}
             canEdit={role === "DM" || canEditCharacter(screen.characterId)}
             onBack={() => setScreen({ name: "list" })}
           />

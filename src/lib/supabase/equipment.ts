@@ -1,7 +1,5 @@
 import { supabase } from "./client";
-import { findFirstFreeSpot } from "../grid/placement";
-import type { PlacedGridItem } from "../grid/gridTypes";
-import { getCharacterBags } from "./bags";
+import { getCharacterBags, findAnyPocketWithRoom } from "./bags";
 
 export interface EquippedItem {
   characterItemId: string;
@@ -86,10 +84,9 @@ export async function equipItem(characterId: string, characterItemId: string, sl
 
 /**
  * Tip: unequips an item and finds it a home in whichever carried
- * pocket has room — same "first fit wins" search as adding a brand new
- * item (addItemToPocket in bags.ts). Throws rather than silently
- * leaving the item nowhere — if nothing fits, the caller needs to know
- * so the player can free up space first.
+ * pocket has room (findAnyPocketWithRoom in bags.ts). Throws rather
+ * than silently leaving the item nowhere — if nothing fits, the caller
+ * needs to know so the player can free up space first.
  */
 export async function unequipItem(characterId: string, characterItemId: string): Promise<void> {
   const { data: itemRow, error: itemError } = await supabase
@@ -103,62 +100,23 @@ export async function unequipItem(characterId: string, characterItemId: string):
   const itemHeight = (itemRow as any).catalogItem.grid_height;
 
   const bags = await getCharacterBags(characterId);
+  const destination = findAnyPocketWithRoom(bags, itemWidth, itemHeight);
 
-  for (const bag of bags) {
-    for (const pocket of bag.pockets) {
-      if (pocket.packingType === "GRID") {
-        const grid = { width: pocket.gridWidth ?? 0, height: pocket.gridHeight ?? 0 };
-        const existingPlacements: PlacedGridItem[] = pocket.items
-          .filter((item) => item.gridX !== null && item.gridY !== null)
-          .map((item) => ({
-            characterItemId: item.characterItemId,
-            x: item.gridX as number,
-            y: item.gridY as number,
-            width: item.gridWidth,
-            height: item.gridHeight,
-          }));
-
-        const spot = findFirstFreeSpot(itemWidth, itemHeight, grid, existingPlacements);
-        if (spot) {
-          const { error } = await supabase
-            .from("character_items")
-            .update({
-              is_equipped: false,
-              equipped_slot: null,
-              character_bag_id: bag.characterBagId,
-              pocket_template_id: pocket.pocketTemplateId,
-              grid_x: spot.x,
-              grid_y: spot.y,
-              slot_index: null,
-            })
-            .eq("id", characterItemId);
-          if (error) throw error;
-          return;
-        }
-      } else {
-        const usedSlots = new Set(pocket.items.map((item) => item.slotIndex));
-        const maxSlots = pocket.slotCount ?? 0;
-        for (let slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
-          if (!usedSlots.has(slotIndex)) {
-            const { error } = await supabase
-              .from("character_items")
-              .update({
-                is_equipped: false,
-                equipped_slot: null,
-                character_bag_id: bag.characterBagId,
-                pocket_template_id: pocket.pocketTemplateId,
-                grid_x: null,
-                grid_y: null,
-                slot_index: slotIndex,
-              })
-              .eq("id", characterItemId);
-            if (error) throw error;
-            return;
-          }
-        }
-      }
-    }
+  if (!destination) {
+    throw new Error("No room in any bag to unequip this item — free up space first.");
   }
 
-  throw new Error("No room in any bag to unequip this item — free up space first.");
+  const { error } = await supabase
+    .from("character_items")
+    .update({
+      is_equipped: false,
+      equipped_slot: null,
+      character_bag_id: destination.characterBagId,
+      pocket_template_id: destination.pocketTemplateId,
+      grid_x: destination.gridX,
+      grid_y: destination.gridY,
+      slot_index: destination.slotIndex,
+    })
+    .eq("id", characterItemId);
+  if (error) throw error;
 }

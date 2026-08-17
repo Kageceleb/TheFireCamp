@@ -3,7 +3,6 @@ import {
   getCharacterBags,
   addBagToCharacter,
   moveItemInGridPocket,
-  removeItemFromPocket,
   addItemToPocket,
   toWeighableBags,
   type CharacterBagData,
@@ -11,6 +10,7 @@ import {
   type PocketWithItems,
 } from "../../lib/supabase/bags";
 import { equipItem } from "../../lib/supabase/equipment";
+import { dropItemToBagOfHolding } from "../../lib/supabase/bagOfHolding";
 import { calculateEncumbrance } from "../../lib/encumbrance/calculateEncumbrance";
 import PocketGrid from "./PocketGrid";
 import UniformSlotPocket from "./UniformSlotPocket";
@@ -19,6 +19,7 @@ import AddItemModal from "./AddItemModal";
 
 interface CharacterBagsPanelProps {
   characterId: string;
+  campaignId: string;
   maxWeightKg: number;
   canEdit: boolean;
   // Bumped by the parent whenever equipment changed somewhere OUTSIDE
@@ -43,7 +44,14 @@ interface AddItemTarget {
  * bar off src/lib/encumbrance so the weight math and the grid math never
  * drift out of sync with each other.
  */
-export default function CharacterBagsPanel({ characterId, maxWeightKg, canEdit, refreshKey, onInventoryChanged }: CharacterBagsPanelProps) {
+export default function CharacterBagsPanel({
+  characterId,
+  campaignId,
+  maxWeightKg,
+  canEdit,
+  refreshKey,
+  onInventoryChanged,
+}: CharacterBagsPanelProps) {
   const [bags, setBags] = useState<CharacterBagData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -77,9 +85,13 @@ export default function CharacterBagsPanel({ characterId, maxWeightKg, canEdit, 
 
   async function handleDropItem() {
     if (!selectedItem) return;
-    await removeItemFromPocket(selectedItem.characterItemId);
-    setSelectedItem(null);
-    await refresh();
+    try {
+      await dropItemToBagOfHolding(campaignId, characterId, selectedItem.characterItemId);
+      setSelectedItem(null);
+      await refresh();
+    } catch (error) {
+      setErrorMessage((error as Error).message);
+    }
   }
 
   async function handleEquip(slot: string) {
