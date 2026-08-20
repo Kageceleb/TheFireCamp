@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 1,
+  "name": "The Camp Fire",
+  "summary": "D&D 5e campaign, inventory, and character management",
+  "entryPoint": "https://REPLACE-WITH-YOUR-DEPLOYED-URL",
+  "api": {
+    "version": "0.1",
+    "initTimeout": 10,
+    "subscriptions": {
+      "dice": {
+        "onRollResults": "handleRollResult"
+      },
+      "symbiote": {
+        "onStateChangeEvent": "handleSymbioteStateChange"
+      }
+    }
+  },
+  "environment": {
+    "webViewBackgroundColor": "#121110",
+    "loadTargetBehavior": "popup"
+  }
+}
